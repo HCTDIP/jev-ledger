@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>jev 公开哈希账本 · 白箱验证</title>
+<style>
+  :root{--bg:#070c18;--card:#0f1830;--line:#22304d;--txt:#e9eefb;--dim:#8ba0c4;--ok:#3ddc97;--bad:#ff8a8a;--acc:#7aa2ff}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--txt);font-family:-apple-system,"PingFang SC",ui-monospace,sans-serif;
+       padding:clamp(.8rem,4vw,1.6rem);padding-bottom:3rem;line-height:1.5}
+  h1{font-size:clamp(1.2rem,5.6vw,1.7rem);margin-bottom:.3rem}
+  h2{font-size:clamp(.92rem,3.9vw,1.1rem);color:var(--acc);margin:1.2rem 0 .5rem}
+  p,li,td,th,label{font-size:clamp(.72rem,3.2vw,.88rem);color:var(--dim)}
+  b{color:var(--txt)}
+  code{font-family:ui-monospace,Menlo,monospace;font-size:.85em;background:#0d1630;color:#cfe0ff;padding:.1em .35em;border-radius:.3em;word-break:break-all}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:.8rem;padding:clamp(.6rem,3vw,.95rem);margin-top:.7rem}
+  .kpi{display:flex;gap:.45rem;flex-wrap:wrap;margin-top:.6rem}
+  .kpi .b{background:var(--card);border:1px solid var(--line);border-radius:.7rem;padding:.45rem .65rem;min-width:5rem}
+  .kpi .k{font-size:clamp(.6rem,2.7vw,.74rem);color:var(--dim)}
+  .kpi .v{font-size:clamp(.9rem,3.8vw,1.25rem);font-weight:700;color:var(--ok)}
+  table{width:100%;border-collapse:collapse;margin-top:.4rem;display:block;overflow-x:auto;white-space:nowrap}
+  td,th{border-bottom:1px solid var(--line);padding:.35em .45em;text-align:left;font-size:clamp(.66rem,3vw,.82rem)}
+  th{color:var(--txt)}
+  textarea{width:100%;min-height:6.5rem;background:#0a1226;color:var(--txt);border:1px solid var(--line);
+           border-radius:.6rem;padding:.6rem;font-family:ui-monospace,Menlo,monospace;font-size:.78rem;margin-top:.4rem}
+  button{background:var(--acc);color:#04122b;border:none;border-radius:.6rem;padding:.55rem 1rem;font-weight:700;
+         font-size:.85rem;margin-top:.5rem}
+  .res{margin-top:.6rem;font-family:ui-monospace,Menlo,monospace;font-size:.78rem;word-break:break-all}
+  .ok{color:var(--ok)} .bad{color:var(--bad)}
+  .dot{display:inline-block;width:.5rem;height:.5rem;border-radius:50%;background:var(--ok);margin-right:.35rem}
+  a{color:var(--acc)}
+  footer{margin-top:1.6rem;color:var(--dim);font-size:.72rem}
+</style>
+</head>
+<body>
+<h1>jev 判定 · 公开哈希账本</h1>
+<p><span class="dot"></span><b>白箱，不是黑箱</b>：每条判定的指纹都在这里，谁都能取，谁都能复核。<br>
+只公开<b>哈希</b>——哈希本身不泄露内容，但能证明「这份记录没被改过」。</p>
+
+<div class="kpi" id="kpi"><div class="b"><div class="k">载入中…</div><div class="v">…</div></div></div>
+
+<h2>① 整表摘要（改一行就变）</h2>
+<div class="card"><code id="digest">…</code><p style="margin-top:.4rem">任何人可重算：把 <a href="ledger_public.jsonl">ledger_public.jsonl</a> 的<b>原始字节</b>做 sha256，应等于上面这个值。</p></div>
+
+<h2>② 逐条指纹</h2>
+<table id="tbl"><thead><tr>
+<th>#</th><th>预测 p</th><th>判定</th><th>结果</th><th>到期</th><th>input_hash</th><th>output_hash</th><th>code</th><th>记录摘要</th>
+</tr></thead><tbody></tbody></table>
+
+<h2>③ 自己验一遍（不用信我）</h2>
+<div class="card">
+  <p>把你手上的<b>输入原文</b>贴进来（JSON：<code>{"model":…,"state":…,"questions":…}</code>），
+  页面在<b>你的浏览器里</b>算 sha256，直接和上表的 <code>input_hash</code> 对：</p>
+  <textarea id="inp" placeholder='{"model":"typesafe/jev-1.13","state":"…","questions":{"…":{}}}'></textarea>
+  <button onclick="verify()">算哈希并比对</button>
+  <div class="res" id="res"></div>
+  <p style="margin-top:.6rem">命令行等价物：<code>python3 verify.py input.json</code>（同一套算法，源码在仓里）</p>
+</div>
+
+<h2>④ 三条追源路径（判错了查哪）</h2>
+<div class="card">
+  <p>1. <b>输入是不是给偏了</b>（最常见）→ 复核 <code>input_hash</code> 对应的原文<br>
+     2. <b>模型是不是漂了</b> → 同输入重跑，比对 <code>output_hash</code><br>
+     3. <b>我们是不是改了逻辑</b> → 比对 <code>code_hash</code> 与当时代码</p>
+</div>
+
+<footer>
+  数据源：<a href="ledger_public.jsonl">ledger_public.jsonl</a> ·
+  <a href="ledger_public.json">ledger_public.json</a> ·
+  <a href="SPEC.md">哈希口径 SPEC</a> ·
+  <a href="verify.py">verify.py</a><br>
+  静态页 · 无服务端 · 不会 503 · 生成时间 <span id="gen">…</span>
+</footer>
+
+<script>
+function canon(o){
+  if(o===null||typeof o!=='object') return JSON.stringify(o);
+  if(Array.isArray(o)) return '['+o.map(canon).join(',')+']';
+  return '{'+Object.keys(o).sort().map(k=>JSON.stringify(k)+':'+canon(o[k])).join(',')+'}';
+}
+async function sha256hex(s){
+  const b=new TextEncoder().encode(s), h=await crypto.subtle.digest('SHA-256',b);
+  return [...new Uint8Array(h)].map(x=>x.toString(16).padStart(2,'0')).join('');
+}
+let HASHES=new Set();
+(async function(){
+  const raw=await (await fetch('ledger_public.jsonl',{cache:'no-store'})).text();
+  const j=await (await fetch('ledger_public.json',{cache:'no-store'})).json();
+  document.getElementById('digest').textContent=j.ledger_digest;
+  document.getElementById('gen').textContent=j.generated_at;
+  document.getElementById('kpi').innerHTML=
+    '<div class="b"><div class="k">条目</div><div class="v">'+j.entries+'</div></div>'+
+    '<div class="b"><div class="k">已回填</div><div class="v">'+j.resolved+'</div></div>'+
+    '<div class="b"><div class="k">可算分</div><div class="v">'+j.scorable+'</div></div>';
+  const tb=document.querySelector('#tbl tbody');
+  (j.rows||[]).forEach(r=>{
+    if(r.input_hash) HASHES.add(r.input_hash);
+    tb.insertAdjacentHTML('beforeend','<tr><td>'+r.no+'</td><td>'+r.p+'</td><td>'+r.verdict+'</td>'+
+      '<td>'+(r.outcome===null?'<span style="color:#8ba0c4">待对账</span>':r.outcome)+'</td><td>'+r.due+'</td>'+
+      '<td>'+(r.input_hash?r.input_hash.slice(0,12)+'…':'—')+'</td>'+
+      '<td>'+(r.output_hash?r.output_hash.slice(0,12)+'…':'—')+'</td>'+
+      '<td>'+(r.code_hash||'—')+'</td><td>'+r.record_digest.slice(0,12)+'…</td></tr>');
+  });
+  // 顺带验整表摘要，证明数据没被动过
+  const live=await sha256hex(raw);
+  const d=document.getElementById('digest');
+  d.insertAdjacentHTML('afterend','<p class="'+(live===j.ledger_digest?'ok':'bad')+'">'+
+    (live===j.ledger_digest?'✅ 现场重算摘要一致，数据未被篡改':'❌ 现场重算摘要不一致！数据被改过')+'</p>');
+})();
+
+async function verify(){
+  const el=document.getElementById('res');
+  let obj;
+  try{ obj=JSON.parse(document.getElementById('inp').value); }
+  catch(e){ el.innerHTML='<span class="bad">JSON 解析失败：'+e.message+'</span>'; return; }
+  const h=await sha256hex(canon(obj));
+  const short=h.slice(0,32);
+  const hit=HASHES.has(short);
+  el.innerHTML='<div>canonical 片段：<code>'+canon(obj).slice(0,160).replace(/</g,'&lt;')+'…</code></div>'+
+    '<div>算得 input_hash = <code>'+short+'</code></div>'+
+    '<div class="'+(hit?'ok':'bad')+'">'+(hit?'✅ 命中！这条判定确实是拿这份输入做的':'❌ 未命中：与已公开的任何一条 input_hash 都不符')+'</div>'+
+    '<div style="color:#8ba0c4;margin-top:.3rem">注：整数与浮点写法差异（1.0 vs 1）会影响结果；以 Python 复算为准。</div>';
+}
+</script>
+</body>
+</html>
